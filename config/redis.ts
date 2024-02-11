@@ -9,4 +9,4 @@ const redisClient = () :any => {
     throw new Error(`redis connection failed`);
 };
 
-export const redis = new Redis(redisClient())
+export const redis = new Redis(redisClient());
