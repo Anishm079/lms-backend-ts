@@ -7,7 +7,7 @@ const emailRegexPattern: RegExp =
 export interface IUser extends Document {
   name: string;
   email: string;
-  password: string;
+  password: string | undefined;
   avatar: {
     public_id: string;
     url: string;
@@ -69,7 +69,7 @@ userSchema.pre<IUser>("save", async function (next) {
   if (!this.isModified("password")) {
     next();
   }
-  this.password = await bcrypt.hash(this.password, 10);
+  this.password = await bcrypt.hash(this.password as string, 10);
   next();
 });
 
@@ -82,14 +82,14 @@ userSchema.methods.comparePassword = async function (
 
 //sign access token
 userSchema.methods.SignAccessToken = function () {
-  return jwt.sign({ id: this._id }, process.env.ACCESS_TOKEN_EXPIRE || "", {
+  return jwt.sign({ id: this._id }, process.env.ACCESS_TOKEN || "", {
 expiresIn: `${process.env.ACCESS_TOKEN_EXPIRE || 5}m`,
 });
 };
 
 //sign refresh token
 userSchema.methods.SignRefreshToken = function () {
-  return jwt.sign({ id: this._id }, process.env.ACCESS_TOKEN_EXPIRE || "", {
+  return jwt.sign({ id: this._id }, process.env.REFRESH_TOKEN || "", {
     expiresIn: `${process.env.REFRESH_TOKEN_EXPIRE || 3}d`,
   });
 };

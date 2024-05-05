@@ -38,8 +38,8 @@ export const sendToken = (user: IUser, statusCode: number, res: Response) => {
   const refreshToken = user.SignRefreshToken();
 
   //upload session to redis
-  const data = redis.set(user._id, JSON.stringify(user) as string);
-  console.log("data => ",data);
+  redis.set(user._id, JSON.stringify(user) as string);
+  
   //set secure to true in prod
   if (process.env.NODE_ENV === "production") {
     accessTokenOptions.secure = true;

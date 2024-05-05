@@ -9,7 +9,8 @@ import path from "path";
 import sendMail from "../utils/sendMail";
 import { accessTokenOptions, refreshTokenOptions, sendToken } from "../utils/jwt";
 import { redis } from "../config/redis";
-import { getUserById } from "../services/user.service";
+import { getAllUsersService, getUserById, updateUserRoleService } from "../services/user.service";
+import cloudinary from "cloudinary"
 
 //register user
 interface IRegistrationBody {
@@ -158,6 +159,8 @@ export const loginUser = CatchAsyncError(
         return next(new ErrorHandler("Invalid email or password", 400));
       }
       
+      user.password = undefined;
+
       sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
@@ -187,7 +190,7 @@ export const logoutUser = CatchAsyncError(
 export const updateAccessToken = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
   try{
     const refresh_token = req.cookies.refresh_token as string;
-    const decoded = jwt.verify(refresh_token,process.env.REFRESH_TOKEN_SECRET as string) as JwtPayload;
+    const decoded = jwt.verify(refresh_token,process.env.REFRESH_TOKEN as string) as JwtPayload;
     const message = `Could not refresh token`;
 
     if(!decoded){
@@ -203,7 +206,7 @@ export const updateAccessToken = CatchAsyncError(async (req:Request,res:Response
     const user = JSON.parse(session);
 
     const accessToken = jwt.sign({id:user._id},process.env.ACCESS_TOKEN as string,{
-      expiresIn:`${process.env.ACCESS_TOKEN || 5}m`
+      expiresIn:`${process.env.ACCESS_TOKEN_EXPIRE || 5}m`
     });
 
     const refreshToken = jwt.sign({id:user._id},process.env.ACCESS_TOKEN as string,{
@@ -227,7 +230,8 @@ export const updateAccessToken = CatchAsyncError(async (req:Request,res:Response
 export const getUserInfo = CatchAsyncError(async (req:Request,res:Response,next:NextFunction) => {
   try{
     const userId = req.user?._id;
-    return await getUserById(userId);
+    const userData = await getUserById(userId);
+    return res.status(200).json(userData);
   }catch(error: any){
     return next(new ErrorHandler(error.message, 400));
   }
@@ -292,3 +296,134 @@ export const updateUserInfo = CatchAsyncError( async (req:Request,res:Response,n
     return next(new ErrorHandler(error.message, 400));
   }
 });
+
+//update password
+
+interface IUserPassword{
+  oldPassword:string;
+  newPassword:string;
+}
+
+export const updatePassword = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const { oldPassword, newPassword } = req.body as IUserPassword;
+    
+    const user = await userModel.findById(req.user?._id);
+
+    if(user?.password === undefined){
+      return next(new ErrorHandler("Invalid user",400))
+    }
+
+    const isPasswordMatch = await user?.comparePassword(oldPassword);
+
+    if(!isPasswordMatch){
+      return next(new ErrorHandler("Invalid old password",400))
+    }
+
+    user.password = newPassword;
+
+    await user.save();
+
+    user.password = undefined;
+
+    await redis.set(req.user?._id,JSON.stringify(user));
+
+    return res.status(200).json({
+      success:true,
+      user
+    })
+
+  }catch(error:any){
+    return next(new ErrorHandler(error.message,400))
+  }
+});
+
+//update profile picture
+
+interface IUpdateProfilePicture{
+  avatar:string;
+}
+
+export const updateProfilePicture = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const { avatar } = req.body as IUpdateProfilePicture;
+    const userId = req.user?._id;
+
+    const user = await userModel.findById(userId);
+
+    if(!avatar || !user){
+      return res.status(400).json({
+        success:false,
+        message:"Invalid request!!!"
+      })
+    }
+    
+    if(user?.avatar?.public_id){
+      await cloudinary.v2.uploader.destroy(user.avatar.public_id);
+    }
+
+    const avatarData = await cloudinary.v2.uploader.upload(avatar,{
+      folder:"avatars",
+      width:150,
+    })
+
+    user.avatar = {
+      public_id:avatarData.public_id,
+      url:avatarData.secure_url
+    }
+
+    await user.save();
+
+    await redis.set(userId,JSON.stringify(user));
+
+    return res.status(400).json({
+      success:true,
+      user
+    })
+
+  }catch(error:any){
+    return next(new ErrorHandler(error.message,400))
+  }
+});
+
+//get all users --only for admin
+export const getAllUsers = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    getAllUsersService(res);
+  }catch(error:any){
+    return next(new ErrorHandler(error.message,400))
+  }
+})
+
+export const updateUserRole = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const { id, role } = req.body;
+    updateUserRoleService(res,id,role);
+  }catch(error:any){
+    return next(new ErrorHandler(error.message,400));
+  }
+})
+
+//Delete user -- only for admin
+export const deleteUser = CatchAsyncError(async (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const { id } = req.params;
+    const user = await userModel.findById(id);
+
+    if(!user){
+      return next(new ErrorHandler("User not found",404));
+    }
+
+    await user.deleteOne({id});
+
+    await redis.del(id);
+
+    res.status(200).json({
+      success:true,
+      message:"User deleted successfully"
+    })
+
+  }catch(error:any){
+    return next(new ErrorHandler(error.message,400));
+  }
+})
