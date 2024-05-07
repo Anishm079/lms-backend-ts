@@ -285,7 +285,7 @@ export const updateUserInfo = CatchAsyncError( async (req:Request,res:Response,n
 
     await user?.save();
 
-    await redis.set(userId,JSON.stringify(user));
+    await redis.set(userId,JSON.stringify(user),"EX",604800);
 
     res.status(201).json({
       success:true,
@@ -326,7 +326,7 @@ export const updatePassword = CatchAsyncError(async (req:Request,res:Response,ne
 
     user.password = undefined;
 
-    await redis.set(req.user?._id,JSON.stringify(user));
+    await redis.set(req.user?._id,JSON.stringify(user),"EX",604800);
 
     return res.status(200).json({
       success:true,
@@ -374,7 +374,7 @@ export const updateProfilePicture = CatchAsyncError(async (req:Request,res:Respo
 
     await user.save();
 
-    await redis.set(userId,JSON.stringify(user));
+    await redis.set(userId,JSON.stringify(user),"EX",604800);
 
     return res.status(400).json({
       success:true,

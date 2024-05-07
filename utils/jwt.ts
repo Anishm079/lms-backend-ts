@@ -38,7 +38,7 @@ export const sendToken = (user: IUser, statusCode: number, res: Response) => {
   const refreshToken = user.SignRefreshToken();
 
   //upload session to redis
-  redis.set(user._id, JSON.stringify(user) as string);
+  redis.set(user._id, JSON.stringify(user) as string,"EX",604800);
   
   //set secure to true in prod
   if (process.env.NODE_ENV === "production") {

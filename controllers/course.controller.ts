@@ -80,7 +80,7 @@ export const getSingleCourse = CatchAsyncError(async (req:Request,res:Response,n
 
         const course = await CourseModel.findById(req.params.id).select("-courseData.videoUrl -courseData.suggesstion -courseData.questions -courseData.links");
 
-        await redis.set(courseId,JSON.stringify(course));
+        await redis.set(courseId,JSON.stringify(course),"EX",604800);
 
         return res.status(200).json({
             success:true,
